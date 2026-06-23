@@ -5,12 +5,23 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mixer"
 version = "0.1.0"
-description = "Lets see what this ends up being."
+description = "Python toolkit for parsing, editing, merging, and assembling Martini 3 coarse-grained topologies"
 readme = "README.md"
-requires-python = ">=3.9"
-authors = [{ name = "Luís Borges Araújo", email = "you@example.com" }]
+requires-python = ">=3.10"
+authors = [
+  { name = "Luís Borges Araújo", email = "luis.borges@ens-lyon.fr"},
+  { name = "Pablo Cardona Perez", email = "pablo.cardona_perez@ens-lyon.fr" }
+]
+
 dependencies = [
-  # should probably add the dependencies here hahah
+  "numpy>=1.22.0",
+  "MDAnalysis>=2.1.0",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=6.2.5",
+  "pytest-cov>=3.0.0",
 ]
 
 [tool.setuptools]

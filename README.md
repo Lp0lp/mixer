@@ -16,12 +16,26 @@ Mixer is a Python toolkit for parsing, editing, merging, and assembling [Martini
  
 ## Installation
  
+Clone the repository:
 ```bash
-pip install mixer   #(SoonTM)
-# or: 
-pip install -e . #from the repo root
+git clone https://github.com/Lp0lp/mixer.git
+```
+Create a virtual environment with the dependencies (e.g. with **conda**):
+```bash
+cd mixer
+conda env create -f environment.yml
+```
+This will create a conda environment with the name mixer.
+
+Then activate your environment:
+```bash
+conda activate mixer
 ```
 
+Install Mixer with pip:
+```bash
+pip install .
+```
 ---
  
 ## Fragment-based assembly of molecules
