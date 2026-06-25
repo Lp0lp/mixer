@@ -126,7 +126,11 @@ class TopologySection(list):
             print(f"{'vs':>6} {'type':>6}  refs")
             print("-" * 40)
             for x in self:
-                print(f"{x['vs']:>6} {x['type']:>6}  {' '.join(x['refs'])}")
+                if x["type"] == "3":
+                    ref_str = "  ".join(f"{r['ref']} {r['weight']}" for r in x["refs"])
+                else:
+                    ref_str = " ".join(x["refs"])
+                print(f"{x['vs']:>6} {x['type']:>6}  {ref_str}")
 
         elif self.kind == "exclusions":
             print("excluded atoms")
@@ -360,6 +364,17 @@ class ITPTopology:
         return entries
 
     def _parse_virtual_sitesn_section(self, lines):
+        """
+        Parse [ virtual_sitesn ] lines.
+
+        Type 3 uses an interleaved idx/weight format:
+            vs  3  ref_idx  weight  ref_idx  weight  ...
+        refs are stored as [{"ref": name, "weight": "0.28005"}, ...]
+
+        All other types use plain atom index lists:
+            vs  type  ref_idx  ref_idx  ...
+        refs are stored as [name, name, ...]
+        """
         entries = []
         for line in lines:
             parts = line.split()
@@ -368,7 +383,19 @@ class ITPTopology:
             try:
                 vs = self.nr_to_name[parts[0]]
                 site_type = parts[1]
-                refs = [self.nr_to_name[x] for x in parts[2:]]
+                rest = parts[2:]
+
+                if site_type == "3":
+                    if len(rest) % 2 != 0:
+                        raise ValueError(
+                            f"Type 3 virtual_sitesn expects interleaved idx/weight pairs, "
+                            f"but got an odd number of remaining tokens in line: {line!r}")
+                    refs = []
+                    for i in range(0, len(rest), 2):
+                        refs.append({"ref": self.nr_to_name[rest[i]], "weight": rest[i + 1]})
+                else:
+                    refs = [self.nr_to_name[x] for x in rest]
+
             except KeyError as e:
                 raise ValueError(f"Atom index {e} not found in [ atoms ] — "
                                  f"referenced in line: {line!r}") from None
@@ -442,8 +469,16 @@ class ITPTopology:
 
     def _format_virtual_sitesn_line(self, entry):
         vs = self.name_to_nr[entry["vs"]]
-        refs = [self.name_to_nr[x] for x in entry["refs"]]
-        return " ".join([vs, entry["type"], *refs])
+        if entry["type"] == "3":
+            # interleaved: ref_idx weight ref_idx weight ...
+            ref_parts = []
+            for r in entry["refs"]:
+                ref_parts.append(self.name_to_nr[r["ref"]])
+                ref_parts.append(r["weight"])
+            return " ".join([vs, entry["type"], *ref_parts])
+        else:
+            refs = [self.name_to_nr[x] for x in entry["refs"]]
+            return " ".join([vs, entry["type"], *refs])
 
     def _format_exclusions_line(self, entry):
         return " ".join(self.name_to_nr[x] for x in entry)
@@ -661,8 +696,19 @@ class ITPTopology:
             getattr(self, section).append(entry)
     
         elif section == "virtual_sitesn":
-            vs, *refs = atom_names
-            self.virtual_sitesn.append({"vs": vs, "type": "n", "refs": list(refs)})
+            vs, site_type, *rest = atom_names
+            if site_type == "3":
+                # rest is expected as alternating ref_name, weight, ref_name, weight, ...
+                if len(rest) % 2 != 0:
+                    raise ValueError(
+                        "virtual_sitesn type 3 expects alternating ref_name/weight pairs.")
+                refs = [{"ref": rest[i], "weight": rest[i + 1]}
+                        for i in range(0, len(rest), 2)]
+                self._check_atoms_exist(*[r["ref"] for r in refs])
+            else:
+                refs = list(rest)
+                self._check_atoms_exist(*refs)
+            self.virtual_sitesn.append({"vs": vs, "type": site_type, "refs": refs})
     
         elif section == "exclusions":
             self.exclusions.append(list(atom_names))
@@ -698,7 +744,10 @@ class ITPTopology:
             setattr(self, section, [e for e in entries
                                      if name not in (e[l] for l in labels)])
         self.virtual_sitesn = [e for e in self.virtual_sitesn
-                               if e["vs"] != name and name not in e["refs"]]
+                               if e["vs"] != name and name not in (
+                                   (r["ref"] if isinstance(r, dict) else r)
+                                   for r in e["refs"]
+                               )]
         self.exclusions = [e for e in self.exclusions if name not in e]
         
         # rebuild
@@ -838,3 +887,4 @@ class ITPTopology:
         parts.append(f"{len(self.virtual_sitesn)} virtual_sitesn")
         parts.append(f"{len(self.exclusions)} exclusions")
         return f"<ITPTopology {' | '.join(parts)}>"
+        
